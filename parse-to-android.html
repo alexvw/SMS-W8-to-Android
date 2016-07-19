@@ -123,11 +123,15 @@
 			var name = ad.DisplayTo;
 			
 			var partsOut = '<parts>';
-			var attachList = ad.Attachments.Attachment;
-			for (var a=0;a<attachList.length;a++){
-			//don't actually grab the content for now, that would require dynamic filesystem access. Just use a placeholder
-				var text = encodeXml(attachList[a].DisplayName);
-				partsOut += '<part seq="'+(a-1)+'" ct="text/plain" name="text_'+(a)+'.txt" chset="106" cd="null" fn="null" cl="text_'+(a)+'.txt" ctt_s="null" ctt_t="null" text="'+text+'" />'
+			if(typeof ad.Attachments == "undefined"){
+			}
+			else{
+				var attachList = ad.Attachments.Attachment;
+				for (var a=0;a<attachList.length;a++){
+				//don't actually grab the content for now, that would require dynamic filesystem access. Just use a placeholder
+					var text = encodeXml(attachList[a].DisplayName);
+					partsOut += '<part seq="'+(a-1)+'" ct="text/plain" name="text_'+(a)+'.txt" chset="106" cd="null" fn="null" cl="text_'+(a)+'.txt" ctt_s="null" ctt_t="null" text="'+text+'" />'
+				}
 			}
 			partsOut += '</parts>';
 		
@@ -179,4 +183,3 @@
 </script>
 
 </html>
-	

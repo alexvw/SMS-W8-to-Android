@@ -1,0 +1,182 @@
+<!doctype html>
+<head>
+	<meta charset="utf-8">
+	<script src="https://code.jquery.com/jquery-1.11.3.js"></script>
+	<script src="xml2json.min.js"></script>
+</head>
+<html>
+
+
+<input type="file" id="files" name="files[]" multiple /><br>
+<output id="log"></output><br>
+<output id="progress">0</output>%
+<br><br>
+<a id="download" disabled>Download XML for Android</a>
+
+    <script>
+	
+	var output = "<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>";
+	function parseSMSXML(sourceXML){
+	// Create x2js instance with default config
+		var x2js = new X2JS();
+		$('#log').html("Loaded XML, parsing...");
+		var messages = x2js.xml_str2json( sourceXML );
+		$('#log').html("Parsing finished");
+		
+		messages = messages.Messages.Add;
+		var formattedMessageObject;
+		var total = messages.length;
+		
+		$('#log').html("Found "+total+" total messages");
+		
+		var proportion = Math.ceil(total/100);
+		output += '<smses count="'+total+'" backup_set="9831453d-f92b-4591-bfd7-6b5904f1c4e3" backup_date="1468961875394">';
+		for (m in messages){
+			var currentMessage = messages[m];
+			var percent = (m / total)*100;
+			if (m%proportion == 0)
+			$('#progress').html(m +" " +percent.toFixed(2));
+			output += addSMSToOutputXML( currentMessage);
+		}
+		output += '</smses>';
+		$('#progress').html(total +" " +100);
+		
+		$('#download').prop('href',(makeTextFile(output))).removeProp('disabled');
+	}
+	
+	var textFile = null,
+	makeTextFile = function (text) {
+		var data = new Blob([text], {type: 'text/plain'});
+
+		// If we are replacing a previously generated file we need to
+		// manually revoke the object URL to avoid memory leaks.
+		if (textFile !== null) {
+		  window.URL.revokeObjectURL(textFile);
+		}
+
+		textFile = window.URL.createObjectURL(data);
+
+		// returns a URL you can use as a href
+		return textFile;
+	};
+	
+	function addSMSToOutputXML(smsObject){
+		var thisXML = "";
+		var ad = smsObject.ApplicationData
+		var mc = ad.MessageClass;
+		//SMS
+		if (mc == "IPM.Note.Mobile.SMS"){
+			//who to
+			var to = ad.To.split('"')[1];
+			//date
+			var dateReceived = new Date((ad.DateReceived || "").replace(/-/g,"/").replace(/[TZ]/g," "));
+			var dateSent = new Date((ad.DateSent || "").replace(/-/g,"/").replace(/[TZ]/g," "));
+			//var dateUnix = dateReceived.getTime();
+
+			//whether sent or received
+			var type;
+			if (ad.messageSenderIsMe)
+				type = 2;
+			else type = 1;
+			//sms body
+			var body = (ad.Body.Data || "");
+			//name
+			//just use to, no data on name for now
+			var name = to;
+			
+			thisXML = '<sms protocol="0" address="'+to+'" date="'+dateReceived.getTime()+'" type="'+type+'" subject="null" body="'+encodeXml(body)+'" toa="null" sc_toa="null" service_center="null" read="1" status="-1" locked="0" date_sent="'+dateSent.getTime()+'" readable_date="'+ad.DateReceived+'" contact_name="'+name+'" />'
+			
+			/*<sms protocol="0" address="+17035999429" date="1468962060407" type="2" subject="null" body="Text text" toa="null" sc_toa="null" service_center="null" read="1" status="-1" locked="0" date_sent="0" readable_date="Jul 19, 2016 5:01:00 PM" contact_name="Julian De Phillips" />*/
+		
+		}
+		//MMS
+		else if (mc == "IPM.Note.Mobile.MMS"){
+		
+			//who to
+			var toList = ad.To.split('"');
+			var outTo = '<addrs>';
+			var address = "";
+			for (var i=2;i<toList.length;i+=2){
+				var replace = toList[i].replace(/<|>| |,/g,'');
+				if (i>2)
+					address += "~";
+				address += replace;
+				outTo += '<addr address="'+replace+'" type="151" charset="106" />';
+			}
+			outTo += '</addrs>'
+			
+			//date
+			var dateReceived = new Date((ad.DateReceived || "").replace(/-/g,"/").replace(/[TZ]/g," "));
+			var dateSent = new Date((ad.DateSent || "").replace(/-/g,"/").replace(/[TZ]/g," "));
+			//var dateUnix = dateReceived.getTime();
+			var prettyDate = ad.DateReceived;
+
+			//whether sent or received
+			var type;
+			if (ad.messageSenderIsMe)
+				type = 2;
+			else type = 1;
+			//sms body
+			var body = (ad.Body.Data || "");
+			//name
+			//just use to, no data on name for now
+			var name = ad.DisplayTo;
+			
+			var partsOut = '<parts>';
+			var attachList = ad.Attachments.Attachment;
+			for (var a=0;a<attachList.length;a++){
+			//don't actually grab the content for now, that would require dynamic filesystem access. Just use a placeholder
+				var text = encodeXml(attachList[a].DisplayName);
+				partsOut += '<part seq="'+(a-1)+'" ct="text/plain" name="text_'+(a)+'.txt" chset="106" cd="null" fn="null" cl="text_'+(a)+'.txt" ctt_s="null" ctt_t="null" text="'+text+'" />'
+			}
+			partsOut += '</parts>';
+		
+			thisXML = '<mms text_only="1" ct_t="application/vnd.wap.multipart.related" using_mode="0" msg_box="1" secret_mode="0" v="16" ct_cls="null" retr_txt_cs="null" d_rpt_st="0" favorite="0" deletable="1" sim_imsi="null" st="null" creator="com.samsung.android.communicationservice" sim_slot="0" read="1"  callback_set="0" m_type="132" locked="0" retr_txt="null" resp_txt="null" rr_st="0" safe_message="0" retr_st="null" reserved="0" msg_id="0" hidden="0" sub="null" seen="1" rr="null" ct_l="null" from_address="null" m_size="266" exp="null" sub_cs="null" sub_id="-1" app_id="0" resp_st="null" date="'+dateReceived+'" date_sent="'+dateSent+'" pri="129" address="'+address+'" d_rpt="128" d_tm="null" read_status="null" device_name="null" spam_report="387" rpt_a="null" m_cls="personal" readable_date="'+prettyDate+'" contact_name="'+name+'">';
+			thisXML += partsOut;
+			thisXML += outTo;
+			thisXML += "</mms>"
+		}
+		return thisXML;
+	}
+	function handleFileSelect(evt) {
+		var sourceXML;
+		var files = evt.target.files; // FileList object
+		var reader = new FileReader();
+		var f = files[0];
+
+		// Closure to capture the file information.
+		reader.onload = (function(theFile) {
+            return function(e) {
+					//contents of the file
+					parseSMSXML(e.target.result);
+			};
+		})(f);
+
+		// Read in the file
+		//reader.readAsDataText(f,UTF-8);
+		reader.readAsText(f);
+        
+	}
+    document.getElementById('files').addEventListener('change', handleFileSelect, false);
+	
+	var xml_special_to_escaped_one_map = {
+    '&': '&amp;',
+    '"': '&quot;',
+    '<': '&lt;',
+    '>': '&gt;'
+	};
+
+	function encodeXml(string) {
+		return string.replace(/([\&"<>])/g, function(str, item) {
+			return xml_special_to_escaped_one_map[item];
+		});
+	};
+	
+    </script>
+
+<script>
+//var x2js = new X2JS(); x2js.xml_str2json( thisXML );
+</script>
+
+</html>
+	

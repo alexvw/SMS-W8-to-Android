@@ -30,7 +30,7 @@
 		$('#log').html("Found "+total+" total messages");
 		
 		var proportion = Math.ceil(total/100);
-		output += '<smses count="'+total+'" backup_set="9831453d-f92b-4591-bfd7-6b5904f1c4e3" backup_date="1468961875394">';
+		output += '<smses count="'+total+'">';
 		for (m in messages){
 			var currentMessage = messages[m];
 			var percent = (m / total)*100;
@@ -59,7 +59,7 @@
 		// returns a URL you can use as a href
 		return textFile;
 	};
-	
+	var re = /\+?1?[\d]{10}|[\d]{3,10}/g; 
 	function addSMSToOutputXML(smsObject){
 		var thisXML = "";
 		var ad = smsObject.ApplicationData
@@ -67,7 +67,14 @@
 		//SMS
 		if (mc == "IPM.Note.Mobile.SMS"){
 			//who to
-			var to = ad.To.split('"')[1];
+			var match;
+			var address;
+			while ((match = re.exec(ad.To)) !== null) {
+				if (match.index === re.lastIndex) {
+					re.lastIndex++;
+				}
+				address = (match[0] || "");
+			}
 			//date
 			var dateReceived = new Date((ad.DateReceived || "").replace(/-/g,"/").replace(/[TZ]/g," "));
 			var dateSent = new Date((ad.DateSent || "").replace(/-/g,"/").replace(/[TZ]/g," "));
@@ -75,16 +82,16 @@
 
 			//whether sent or received
 			var type;
-			if (ad.messageSenderIsMe)
+			if (ad.MessageSenderIsMe == "1")
 				type = 2;
 			else type = 1;
 			//sms body
 			var body = (ad.Body.Data || "");
 			//name
 			//just use to, no data on name for now
-			var name = to;
+			var name = ad.To;
 			
-			thisXML = '<sms protocol="0" address="'+to+'" date="'+dateReceived.getTime()+'" type="'+type+'" subject="null" body="'+encodeXml(body)+'" toa="null" sc_toa="null" service_center="null" read="1" status="-1" locked="0" date_sent="'+dateSent.getTime()+'" readable_date="'+ad.DateReceived+'" contact_name="'+name+'" />'
+			thisXML = '<sms protocol="0" address="'+encodeXml(address)+'" date="'+dateReceived.getTime()+'" type="'+type+'" subject="null" body="'+encodeXml(body)+'" toa="null" sc_toa="null" service_center="null" read="1" status="-1" locked="0" date_sent="'+dateSent.getTime()+'" readable_date="'+ad.DateReceived+'" contact_name="'+encodeXml(name)+'" />'
 			
 			/*<sms protocol="0" address="+17035999429" date="1468962060407" type="2" subject="null" body="Text text" toa="null" sc_toa="null" service_center="null" read="1" status="-1" locked="0" date_sent="0" readable_date="Jul 19, 2016 5:01:00 PM" contact_name="Julian De Phillips" />*/
 		
@@ -93,17 +100,20 @@
 		else if (mc == "IPM.Note.Mobile.MMS"){
 		
 			//who to
-			var toList = ad.To.split('"');
 			var outTo = '<addrs>';
+			var match;
 			var address = "";
-			for (var i=2;i<toList.length;i+=2){
-				var replace = toList[i].replace(/<|>| |,/g,'');
-				if (i>2)
-					address += "~";
-				address += replace;
-				outTo += '<addr address="'+replace+'" type="151" charset="106" />';
+			while ((match = re.exec(ad.To)) !== null) {
+				if (match.index === re.lastIndex) {
+					re.lastIndex++;
+				}
+				if (address != "")
+				address += "~"
+				address += (match[0]);
+				outTo += '<addr address="'+encodeXml(match[0])+'" type="151" charset="106" />';
 			}
 			outTo += '</addrs>'
+			
 			
 			//date
 			var dateReceived = new Date((ad.DateReceived || "").replace(/-/g,"/").replace(/[TZ]/g," "));
@@ -113,7 +123,7 @@
 
 			//whether sent or received
 			var type;
-			if (ad.messageSenderIsMe)
+			if (ad.MessageSenderIsMe == "1")
 				type = 2;
 			else type = 1;
 			//sms body
@@ -135,7 +145,7 @@
 			}
 			partsOut += '</parts>';
 		
-			thisXML = '<mms text_only="1" ct_t="application/vnd.wap.multipart.related" using_mode="0" msg_box="1" secret_mode="0" v="16" ct_cls="null" retr_txt_cs="null" d_rpt_st="0" favorite="0" deletable="1" sim_imsi="null" st="null" creator="com.samsung.android.communicationservice" sim_slot="0" read="1"  callback_set="0" m_type="132" locked="0" retr_txt="null" resp_txt="null" rr_st="0" safe_message="0" retr_st="null" reserved="0" msg_id="0" hidden="0" sub="null" seen="1" rr="null" ct_l="null" from_address="null" m_size="266" exp="null" sub_cs="null" sub_id="-1" app_id="0" resp_st="null" date="'+dateReceived+'" date_sent="'+dateSent+'" pri="129" address="'+address+'" d_rpt="128" d_tm="null" read_status="null" device_name="null" spam_report="387" rpt_a="null" m_cls="personal" readable_date="'+prettyDate+'" contact_name="'+name+'">';
+			thisXML = '<mms text_only="1" ct_t="application/vnd.wap.multipart.related" using_mode="0" msg_box="1" secret_mode="0" v="16" ct_cls="null" retr_txt_cs="null" d_rpt_st="0" favorite="0" deletable="1" sim_imsi="null" st="null" creator="com.samsung.android.communicationservice" sim_slot="0" read="1"  callback_set="0" m_type="132" locked="0" retr_txt="null" resp_txt="null" rr_st="0" safe_message="0" retr_st="null" reserved="0" msg_id="0" hidden="0" sub="null" seen="1" rr="null" ct_l="null" from_address="null" m_size="266" exp="null" sub_cs="null" sub_id="-1" app_id="0" resp_st="null" date="'+dateReceived+'" date_sent="'+dateSent+'" pri="129" address="'+encodeXml(address)+'" d_rpt="128" d_tm="null" read_status="null" device_name="null" spam_report="387" rpt_a="null" m_cls="personal" readable_date="'+prettyDate+'" contact_name="'+name+'">';
 			thisXML += partsOut;
 			thisXML += outTo;
 			thisXML += "</mms>"
@@ -183,3 +193,4 @@
 </script>
 
 </html>
+	
